@@ -59,6 +59,7 @@ log_message() {
     local log_file="${LOG_DIR}/${LV_NAME}_${datestamp}.log"
     local log_level="$1"
     local message="$2"
+    LOG_FILE="${log_file}"
 
     # Log the message with timestamp and log level
     local log_entry="[${timestamp}] >< [${log_level}] : ${message}"
@@ -88,8 +89,8 @@ make_logging() {
 
     # Create log directory if it doesn't exist
     if [ ! -d "$LOG_DIR" ]; then
-        local make_log_dir=$(mkdir -vp "${LOG_DIR}" || exit 1)
-        
+        local make_log_dir=$(sudo mkdir -vp "${LOG_DIR}" || exit 1)
+
         if [ "$make_log_directory" != "" ]; then
           lprompt "${LL[0]}" "Log directory created -> ${make_log_dir}"
         else
@@ -103,6 +104,7 @@ make_logging() {
         sudo touch "$log_file" || { lprompt "${LL[2]}" "${LL[2]}: Could not create log file. Exiting."; exit 1; }
         sudo chmod 644 "$log_file"
         lprompt "${LL[0]}" "Log file created -> ${log_file}"
+        LOG_FILE="$log_file"
     fi
 
 }
@@ -133,7 +135,7 @@ get_oldest_snapshot() {
 
     # If there's only one LV, you might choose to handle it differently
     if [ "$lv_count" -le 1 ]; then
-        log_message "${LL[0]}" "Only one logical volume present. No comparison needed."
+        log_message "${LL[0]}" "Only one logical volume present. Nothing to compare."
 
         # Get the oldest LV
         # oldest_snapshot=$(echo "${lv_list}" | awk '/ / {print $(NF-1)}')
@@ -162,7 +164,7 @@ retire_old_snapshots() {
     echo "$oldest_snapshot"
 
     # Check if the used space percentage is less than or equal to the threshold
-    if [ "${used_space_percentage}" -le "${THRESHOLD}" ]; then
+    if [ "${used_space_percentage}" -ge "${THRESHOLD}" ]; then
       lprompt "${LL[0]}" "Used space is greater than or equal to ${THRESHOLD}% of the total volume size."
 
       # Check if an oldest file exists and retire it
@@ -174,7 +176,7 @@ retire_old_snapshots() {
       fi
 
     else
-      lprompt "${LL[0]}" "At ${used_space_percentage}%, used space is less than ${THRESHOLD}% of the total volume size. No action necessary at this time."
+      lprompt "${LL[0]}" "At ${used_space_percentage}%, used space is less than ${THRESHOLD}% of the total volume size. No snapshots need to be retired at this time."
     fi
 }
 
