@@ -5,7 +5,7 @@
 ################################################################################
 # Author: Aaron `Tripp` N. Josserand Austin
 # Version: v0.0.396-alpha
-# Date: 27-JAN-2024 T 21:13 Mountain US
+# Originated: 27-JAN-2024
 ################################################################################
 # MIT License
 ################################################################################
@@ -28,20 +28,51 @@
 #
 # Full License: https://tripp.mit-license.org/
 ################################################################################
-# Dependencies:
-# bc
-# awk
-# lvm2
-#  vgs
-#  lvs
-#  lvcreate
-#  lvremove
-# date
-# sudo
-# mkdir
-# df
-# hostname
-# pwd
+# This script, autolvmb.sh, automates the management of logical volume (LV)
+# snapshots. It is designed to work within an LVM2 managed system, specifically
+# targeting Ubuntu-like distributions. The script provides functionalities to
+# create LV snapshots, manage snapshot size, and automate the removal of old
+# snapshots based on predefined conditions.
+#
+# Features:
+# - Dynamically calculates and sets the size for new snapshots.
+# - Creates snapshots with optional user-defined names.
+# - Automatically identifies and removes the oldest snapshots when the number
+#   exceeds a user-defined threshold.
+# - Interactive confirmation prompts for critical actions.
+# - Comprehensive logging of actions and system status.
+#
+# Dependencies: bc, awk, lvm2 utilities (vgs, lvs, lvcreate, lvremove), date,
+# sudo, mkdir, df, hostname, pwd.
+#
+# Usage:
+# Run the script as root or using sudo. The script accepts several command-line
+# options for customizing its behavior. By default, it operates on a predefined
+# logical volume and volume group.
+#
+# Command-Line Options:
+# -h, --help: Display help message and exit.
+# -g, --get-groups: List available volume groups.
+# -l, --list-volumes: List available logical volumes.
+# -n, --snapshot-name: Set custom name for the snapshot.
+# -k, --snapshot-keep-count: Define how many snapshots to retain.
+# -d, --device: Specify the device for snapshot creation.
+# -v, --version: Display script version.
+#
+# Examples:
+#   sudo ./autolvmb.sh
+#   sudo ./autolvmb.sh --snapshot-name my-snapshot
+#   sudo ./autolvmb.sh --device my-vg/my-lv --snapshot-name my-snapshot
+#
+# Note:
+# Ensure that the script is run with sufficient privileges, as it requires root
+# access for most of its operations. The script performs checks and logging to
+# ensure transparency and reliability during execution.
+#
+# Feedback and Contributions:
+# Contributions and feedback are welcomed. Please reach out or contribute via
+# the project's GitHub repository.
+################################################################################
 
 # Check if the script is run as root
 if [ "$(id -u)" -ne 0 ]; then
@@ -57,7 +88,7 @@ readonly VERSION="v0.0.396-alpha"
 readonly LL=("INFO" "WARNING" "ERROR")
 SNAPSHOT_NAME=${SNAPSHOT_NAME:-"${LV_NAME}_$(date +%Y%m%d_%H%M%S)"}
 SNAPSHOT_DEVICE=${SNAPSHOT_DEVICE:-"/dev/${VG_NAME}/${LV_NAME}"}
-SNAPSHOT_KEEP_COUNT=$(SNAPSHOT_KEEP_COUNT:-30)
+SNAPSHOT_KEEP_COUNT=${SNAPSHOT_KEEP_COUNT:-30}
 LOG_DIR="/var/log/autolvmb"
 DEBUG=${DEBUG:-0} # Enable DEBUG mode (set to 1 to enable)
 LOG_FILE=""
