@@ -102,7 +102,7 @@ make_logging() {
 
   # Create log directory if it doesn't exist
   if [ ! -d "$LOG_DIR" ]; then
-    local make_log_dir=$(sudo mkdir -vp "${LOG_DIR}" || exit 1)
+    local make_log_dir=$(sudo mkdir -vp "${LOG_DIR}" || { lprompt "${LL[2]}" "${LL[2]}: Could not create log directory. Exiting."; exit 1; })
 
     if [ "$make_log_directory" != "" ]; then
       lprompt "${LL[0]}" "Log directory created -> ${make_log_dir}"
@@ -113,12 +113,25 @@ make_logging() {
   fi
 
   # Check if log file exists, create if not
-  if [ ! -f "$log_file" ]; then
-    sudo touch "$log_file" || { lprompt "${LL[2]}" "${LL[2]}: Could not create log file. Exiting."; exit 1; }
-    sudo chmod 644 "$log_file"
+  if [ ! -f "${log_file}" ]; then
+    sudo touch "${log_file}" && lprompt "${LL[0]}" "${LL[0]}: Log file created." || { lprompt "${LL[2]}" "${LL[2]}: Could not create log file. Exiting."; exit 1; }
+    lprompt "${LL[0]}" "$(sudo chmod -v 644 ${log_file})" || { lprompt "${LL[2]}" "${LL[2]}: Could not chmod log file to 644. Exiting."; exit 1; }
     lprompt "${LL[0]}" "Log file created -> ${log_file}"
-    LOG_FILE="$log_file"
+    LOG_FILE="${log_file}"
   fi
+}
+
+confirm_action() {
+  lprompt "${LL[0]}" "$1"
+
+  while true; do
+    read -p "$1 (y/n): " yn
+    case $yn in
+      [Yy]* ) break;;
+      [Nn]* ) echo "Action cancelled by user."; return 1;;
+      * ) echo "Please answer Y for yes or N for no.";;
+    esac
+  done
 }
 
 set_snapshot_size() {
@@ -244,12 +257,10 @@ EOF
       exit 0
       ;;
     -g|--get-groups)
-      shift
       sudo vgs
       exit 0
       ;;
     -l|--list-volumes)
-      shift
       sudo lvs
       exit 0
       ;;
