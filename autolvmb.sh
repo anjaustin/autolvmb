@@ -31,10 +31,11 @@
 # Dependencies:
 # bc
 # awk
-# vgs
-# lvs
-# lvcreate
-# lvremove
+# lvm2
+#  vgs
+#  lvs
+#  lvcreate
+#  lvremove
 # date
 # sudo
 # mkdir
@@ -44,20 +45,19 @@
 
 # Check if the script is run as root
 if [ "$(id -u)" -ne 0 ]; then
-    echo "This script must be run as root. Please use sudo."
-    exit 1
+  echo "This script must be run as root. Please use sudo."
+  exit 1
 fi
 
 ### VARIABLES ###
 readonly VG_NAME="ubuntu-vg"
 readonly LV_NAME="ubuntu-lv"
-readonly SNAPSHOT_DEVICE="/dev/${VG_NAME}/${LV_NAME}"
 readonly THRESHOLD=25
-readonly SNAPSHOT_PATTERN="${LV_NAME}_*"
 readonly VERSION="v0.0.396-alpha"
 readonly LL=("INFO" "WARNING" "ERROR")
 SNAPSHOT_NAME=${SNAPSHOT_NAME:-"${LV_NAME}_$(date +%Y%m%d_%H%M%S)"}
-SNAPSHOT_DEVICE=${SNAPSHOT_DEVICE:-"ubuntu-vg/ubuntu-lv"}
+SNAPSHOT_DEVICE=${SNAPSHOT_DEVICE:-"/dev/${VG_NAME}/${LV_NAME}"}
+SNAPSHOT_KEEP_COUNT=$(SNAPSHOT_KEEP_COUNT:-30)
 LOG_DIR="/var/log/autolvmb"
 DEBUG=${DEBUG:-0} # Enable DEBUG mode (set to 1 to enable)
 LOG_FILE=""
@@ -160,9 +160,6 @@ get_oldest_snapshot() {
   if [ "$lv_count" -le 1 ]; then
     log_message "${LL[0]}" "Only one logical volume present. Nothing to compare."
 
-    # Get the oldest LV
-    # oldest_snapshot=$(echo "${lv_list}" | awk '/ / {print $(NF-1)}')
-
     if [ "$LV_NAME" == "$oldest_snapshot" ]; then
       log_message "${LL[1]}" "Only the active logical volume, ${SNAPSHOT_DEVICE}, exists. No snapshots detected."
     fi
@@ -183,8 +180,8 @@ retire_old_snapshots() {
   # Get the free space information for the current volume and extract the free space percentage
   local used_space_percentage=$(df -h . | awk 'NR==2 { sub("%", "", $5); print $5 }')
   local oldest_snapshot="/dev/${VG_NAME}/${SNAPSHOT_TO_REMOVE}"
-
-  echo "$oldest_snapshot"
+  local total_snapshots=$(echo "$old_snapshots" | wc -l)
+  local old_snapshots=$(sudo lvs --noheadings -o lv_name --sort lv_time | grep 'ubuntu-lv_' | head -n 10)
 
   # Check if the used space percentage is less than or equal to the threshold
   if [ "${used_space_percentage}" -ge "${THRESHOLD}" ]; then
@@ -193,11 +190,18 @@ retire_old_snapshots() {
     # Check if an oldest file exists and retire it
     if [ -b "${oldest_snapshot}" ]; then
       lprompt "${LL[0]}" "Removing the oldest snapshot: ${oldest_snapshot}"
-      # lvremove "${oldest_snapshot}"
+      lvremove "${oldest_snapshot}"
     else
       lprompt "${LL[1]}" "No matching snapshots were found."
     fi
+  elif [ "$total_snapshots" -ge 30 ]; then
+    lprompt "${LL[0]}" "Removing the 10 oldest snapshots..."
 
+    for snapshot in $old_snapshots; do
+      lvremove -f "${snapshot}"
+    done
+  elif [ "$total_snapshots" -lt 30 ]; then
+    lprompt "${LL[0]}" "There less than 30 snapshots of the active logical volume. No snapshots need to be retired at this time."
   else
     lprompt "${LL[0]}" "At ${used_space_percentage}%, used space is less than ${THRESHOLD}% of the total volume size. No snapshots need to be retired at this time."
   fi
@@ -209,15 +213,18 @@ while [[ $# -gt 0 ]]; do
     -h|--help)
       # Display usage information
       cat <<EOF
-Usage: [sudo] $0 [-h|--help] [-v|--version] [--snapshot-name NAME] [--device DEVICE]
+Usage: [sudo] $0 [-h|--help] [-v|--version] [-n|--snapshot-name NAME] [-k|--snapshot-keep-count 30] [-d|--device DEVICE PATH] ...
 
 Create a snapshot of a logical volume.
 
 Options:
-  -h, --help           Display this help message and exit.
-  -v, --version        Display version information.
-  --snapshot-name NAME Set the name for the snapshot. Default is "backup-snapshot".
-  --device DEVICE      Set the logical volume device for the snapshot. Default is "ubuntu-vg/ubuntu-lv".
+  -h, --help                        Display this help message and exit.
+  -g, --get-groups                  List availavble volume groups.
+  -l, --list-volumes                List the available logical volumes.
+  -n, --snapshot-name NAME          Set the name for the snapshot. Default is "backup-snapshot".
+  -k, --snapshot-keep-count INTEGER Set the number of snapshots to keep. Snapshots in excess of this number will be removed. Default is 30.
+  -d, --device DEVICE               Set the device you wish to snapshot. Default is "/dev/ubuntu-vg/ubuntu-lv".
+  -v, --version                     Display version information.
 
 Examples:
   ./autolvmb.sh
@@ -226,7 +233,7 @@ Examples:
 
 Requirements:
   - This script selectively requires elevated privileges. You can run it with 'sudo' for your convenience.
-  - Dependencies: lvm2 (for lvcreate, lvs).
+  - Dependencies: lvm2 (for lvcreate, lvs, lvremove).
 
 How to Run:
   1. Make the script executable: chmod u+x $0
@@ -234,27 +241,38 @@ How to Run:
   3. Optionally, specify snapshot name and device.
 
 EOF
-        exit 0
-        ;;
-    --snapshot-name)
-        # Set custom snapshot name
-        shift
-        SNAPSHOT_NAME="$1"
-        ;;
-    --device)
-        # Set custom logical volume device
-        shift
-        SNAPSHOT_DEVICE="$1"
-        ;;
+      exit 0
+      ;;
+    -g|--get-groups)
+      shift
+      sudo vgs
+      exit 0
+      ;;
+    -l|--list-volumes)
+      shift
+      sudo lvs
+      exit 0
+      ;;
+    -n|--snapshot-name)
+      shift
+      SNAPSHOT_NAME="$1"
+      ;;
+    -k|--snapshot-keep-count)
+      shift
+      SNAPSHOT_KEEP_COUNT="$1"
+      ;;
+    -d|--device)
+      shift
+      SNAPSHOT_DEVICE="$1"
+      ;;
     -v|--version)
-        # Display version
-        echo "$VERSION"
-        exit 0
-        ;;
+      echo "$VERSION"
+      exit
+      ;;
     *)
-        echo "Invalid option. Use -h or --help for usage information."
-        exit 1
-        ;;
+      echo "Invalid option. Use -h or --help for usage information."
+      exit 1
+      ;;
   esac
   shift
 done
