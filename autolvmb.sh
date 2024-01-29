@@ -4,7 +4,7 @@
 # autolvmb.sh
 ################################################################################
 # Author: Aaron `Tripp` N. Josserand Austin
-# Version: v0.0.3-alpha
+# Version: v0.0.396-alpha
 # Date: 27-JAN-2024 T 21:13 Mountain US
 ################################################################################
 # MIT License
@@ -28,6 +28,19 @@
 #
 # Full License: https://tripp.mit-license.org/
 ################################################################################
+# Dependencies:
+# bc
+# awk
+# vgs
+# lvs
+# lvcreate
+# lvremove
+# date
+# sudo
+# mkdir
+# df
+# hostname
+# pwd
 
 # Check if the script is run as root
 if [ "$(id -u)" -ne 0 ]; then
@@ -39,11 +52,12 @@ fi
 readonly VG_NAME="ubuntu-vg"
 readonly LV_NAME="ubuntu-lv"
 readonly SNAPSHOT_DEVICE="/dev/${VG_NAME}/${LV_NAME}"
-readonly SNAPSHOT_NAME="${LV_NAME}_$(date +%Y%m%d_%H%M%S)"
-readonly THRESHOLD=75
+readonly THRESHOLD=25
 readonly SNAPSHOT_PATTERN="${LV_NAME}_*"
-readonly VERSION="v0.0.3-alpha"
+readonly VERSION="v0.0.396-alpha"
 readonly LL=("INFO" "WARNING" "ERROR")
+SNAPSHOT_NAME=${SNAPSHOT_NAME:-"${LV_NAME}_$(date +%Y%m%d_%H%M%S)"}
+SNAPSHOT_DEVICE=${SNAPSHOT_DEVICE:-"ubuntu-vg/ubuntu-lv"}
 LOG_DIR="/var/log/autolvmb"
 DEBUG=${DEBUG:-0} # Enable DEBUG mode (set to 1 to enable)
 LOG_FILE=""
@@ -189,8 +203,66 @@ retire_old_snapshots() {
   fi
 }
 
+# Parse command-line options
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      # Display usage information
+      cat <<EOF
+Usage: [sudo] $0 [-h|--help] [-v|--version] [--snapshot-name NAME] [--device DEVICE]
+
+Create a snapshot of a logical volume.
+
+Options:
+  -h, --help           Display this help message and exit.
+  -v, --version        Display version information.
+  --snapshot-name NAME Set the name for the snapshot. Default is "backup-snapshot".
+  --device DEVICE      Set the logical volume device for the snapshot. Default is "ubuntu-vg/ubuntu-lv".
+
+Examples:
+  ./autolvmb.sh
+  sudo ./autolvmb.sh --snapshot-name my-snapshot
+  sudo ./autolvmb.sh --device my-vg/my-lv --snapshot-name my-snapshot
+
+Requirements:
+  - This script selectively requires elevated privileges. You can run it with 'sudo' for your convenience.
+  - Dependencies: lvm2 (for lvcreate, lvs).
+
+How to Run:
+  1. Make the script executable: chmod u+x $0
+  2. Run the script: [sudo] $0
+  3. Optionally, specify snapshot name and device.
+
+EOF
+        exit 0
+        ;;
+    --snapshot-name)
+        # Set custom snapshot name
+        shift
+        SNAPSHOT_NAME="$1"
+        ;;
+    --device)
+        # Set custom logical volume device
+        shift
+        SNAPSHOT_DEVICE="$1"
+        ;;
+    -v|--version)
+        # Display version
+        echo "$VERSION"
+        exit 0
+        ;;
+    *)
+        echo "Invalid option. Use -h or --help for usage information."
+        exit 1
+        ;;
+  esac
+  shift
+done
+
 make_logging
 log_message "${LL[0]}" "Logging ready."
+
+log_message "${LL[0]}" "Script execution started on $(hostname -f):$(pwd)."
 
 log_message "${LL[0]}" "Starting snapshot script..."
 create_snapshot
