@@ -90,8 +90,8 @@ lprompt() {
   [ "$DEBUG" = "1" ] && echo -e "${log_level}: ${message}"
 
   # Always prompt the user and log the activity
-  log_message "$log_level" "$message"
-  echo -e "$message"
+  log_message "${log_level}" "${message}"
+  echo -e "${message}"
 }
 
 # Setup logging directory and initial log file
@@ -128,8 +128,8 @@ confirm_action() {
     read -p "$1 (y/n): " yn
     case $yn in
       [Yy]* ) break;;
-      [Nn]* ) echo "Action cancelled by user."; return 1;;
-      * ) echo "Please answer Y for yes or N for no.";;
+      [Nn]* ) lprompt "${LL[1]}" "Action cancelled by user."; return 1;;
+      * ) lprompt "${LL[0]}" "Please answer Y for yes or N for no.";;
     esac
   done
 }
@@ -138,17 +138,23 @@ set_snapshot_size() {
   # Retrieve the size of ubuntu-lv in megabytes (MB) and remove the 'm' character
   size=$(sudo lvs --noheadings --units m --options LV_SIZE ubuntu-vg/ubuntu-lv | tr -d '[:space:]m')
 
+  ssize=$(echo "$size * 0.025" | bc)
+
+  lprompt "${LL[0]}" "Snapshot size set to ${ssize}M."
+
   # Calculate 2.5% of this size and echo it
-  echo $(echo "$size * 0.025" | bc)
+  echo $ssize
 }
 
 # Generate lv snapshot
 create_snapshot() {
+  confirm_action "Are you sure you want to create a snapshot?" || return
+
   # Call set_snapshot_size and capture the output
   local SNAPSHOT_SIZE="$(set_snapshot_size)M"
 
   # Create the snapshot
-  lvcreate --size "${SNAPSHOT_SIZE}" --snapshot --name "${SNAPSHOT_NAME}" "${SNAPSHOT_DEVICE}"
+  lprompt "${LL[0]}" "$(lvcreate --size $SNAPSHOT_SIZE --snapshot --name $SNAPSHOT_NAME $SNAPSHOT_DEVICE)"
 
   # Check if the snapshot creation was successful
   if [ $? -eq 0 ]; then
@@ -202,14 +208,15 @@ retire_old_snapshots() {
 
     # Check if an oldest file exists and retire it
     if [ -b "${oldest_snapshot}" ]; then
+      confirm_action "Are you sure you want to remove snapshot ${oldest_snapshot}?" || return
       lprompt "${LL[0]}" "Removing the oldest snapshot: ${oldest_snapshot}"
       lvremove "${oldest_snapshot}"
     else
       lprompt "${LL[1]}" "No matching snapshots were found."
     fi
   elif [ "$total_snapshots" -ge 30 ]; then
+    confirm_action "Are you sure you want to remove the 10 oldest snapshots?" || return
     lprompt "${LL[0]}" "Removing the 10 oldest snapshots..."
-
     for snapshot in $old_snapshots; do
       lvremove -f "${snapshot}"
     done
