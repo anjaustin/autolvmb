@@ -42,7 +42,7 @@
 # - Interactive confirmation prompts for critical actions.
 # - Comprehensive logging of actions and system status.
 #
-# Dependencies: bc, awk, lvm2 utilities (vgs, lvs, lvcreate, lvremove), date,
+# Dependencies: bc, awk, lvm2 (vgs, lvs, lvcreate, lvremove), date,
 # sudo, mkdir, df, hostname, pwd.
 #
 # Usage:
@@ -64,14 +64,9 @@
 #   sudo ./autolvmb.sh --snapshot-name my-snapshot
 #   sudo ./autolvmb.sh --device my-vg/my-lv --snapshot-name my-snapshot
 #
-# Note:
-# Ensure that the script is run with sufficient privileges, as it requires root
-# access for most of its operations. The script performs checks and logging to
-# ensure transparency and reliability during execution.
-#
 # Feedback and Contributions:
 # Contributions and feedback are welcomed. Please reach out or contribute via
-# the project's GitHub repository.
+# the project's GitHub repository. https://github.com/anjaustin/autolvmb
 ################################################################################
 
 # Check if the script is run as root
