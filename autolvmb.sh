@@ -232,10 +232,10 @@ retire_old_snapshots() {
   # Get the free space information for the current volume and extract the free space percentage
   local used_space_percentage=$(df -h . | awk 'NR==2 { sub("%", "", $5); print $5 }')
   local oldest_snapshot="/dev/${VG_NAME}/${SNAPSHOT_TO_REMOVE}"
-  local old_snapshots=$(lvs --noheadings -o lv_name --sort lv_time | grep 'ubuntu-lv_' | head -n 10 || { lprompt "${LL2}" "${LL2}: Could not get list of logical volumes. Exiting."; exit 1; })
+  local old_snapshots=$(lvs --noheadings -o lv_name --sort lv_time | grep 'ubuntu-lv_' | head -n 16 || { lprompt "${LL2}" "${LL2}: Could not get list of logical volumes. Exiting."; exit 1; })
   local total_snapshots=$(echo "${old_snapshots}" | wc -l)
 
-  # Check if the used space percentage is less than or equal to the threshold
+  # Remove oldest snapshot if the used space percentage is less than or equal to the threshold
   if [ "${used_space_percentage}" -ge "${THRESHOLD}" ]; then
     lprompt "${LL0}" "Used space is greater than or equal to ${THRESHOLD}% of the total volume size."
 
@@ -248,7 +248,10 @@ retire_old_snapshots() {
     else
       lprompt "${LL1}" "No matching snapshots were found."
     fi
-  elif [ "$total_snapshots" -ge 30 ]; then
+  fi
+
+  # Remove the last 16 snapshots if there are more than 32 snapshots
+  if [ "$total_snapshots" -ge 34 ]; then # Set to 34 to account for the origin/open LV
     confirm_action "Are you sure you want to remove the 10 oldest snapshots?" || return
     lprompt "${LL0}" "Removing the 10 oldest snapshots..."
     for snapshot in $old_snapshots; do
@@ -257,7 +260,7 @@ retire_old_snapshots() {
         lprompt "${LL0}" "$(lvremove -f /dev/${VG_NAME}/${snapshot})"
       fi
     done
-  elif [ "$total_snapshots" -lt 30 ]; then
+  elif [ "$total_snapshots" -l3 33 ]; then
     lprompt "${LL0}" "There less than 30 snapshots of the active logical volume. No snapshots need to be retired at this time."
   else
     lprompt "${LL0}" "At ${used_space_percentage}%, used space is less than ${THRESHOLD}% of the total volume size. No snapshots need to be retired at this time."
