@@ -4,7 +4,7 @@
 # autolvmb.sh
 ################################################################################
 # Author: Aaron `Tripp` N. Josserand Austin
-# Version: v0.0.4-alpha
+# Version: v0.0.444-alpha
 # Originated: 27-JAN-2024
 ################################################################################
 # MIT License
@@ -80,7 +80,7 @@ DEPENDENCIES=("bc" "awk" "vgs" "lvs" "lvcreate" "lvremove" "date" "sudo" "mkdir"
 readonly VG_NAME="ubuntu-vg"
 readonly LV_NAME="ubuntu-lv"
 readonly THRESHOLD=25
-readonly VERSION="v0.0.4-alpha"
+readonly VERSION="v0.0.444-alpha"
 readonly LL0="INFO"
 readonly LL1="WARNING"
 readonly LL2="ERROR"
@@ -248,6 +248,8 @@ retire_old_snapshots() {
     else
       lprompt "${LL1}" "No matching snapshots were found."
     fi
+  else
+    lprompt "${LL0}" "At ${used_space_percentage}%, used space is less than ${THRESHOLD}% of the total volume size. No snapshots need to be retired at this time."
   fi
 
   # Remove the last 16 snapshots if there are more than 32 snapshots
@@ -260,10 +262,8 @@ retire_old_snapshots() {
         lprompt "${LL0}" "$(lvremove -f /dev/${VG_NAME}/${snapshot})"
       fi
     done
-  elif [ "$total_snapshots" -le 33 ]; then
-    lprompt "${LL0}" "There less than 33 snapshots of the open logical volume. No snapshots need to be retired at this time."
   else
-    lprompt "${LL0}" "At ${used_space_percentage}%, used space is less than ${THRESHOLD}% of the total volume size. No snapshots need to be retired at this time."
+    lprompt "${LL0}" "There less than 33 snapshots of the open logical volume. No snapshots need to be retired at this time."
   fi
 }
 
@@ -353,3 +353,6 @@ retire_old_snapshots
 log_message "${LL0}" "Check log file ${LOG_DIR}/${LOG_FILE} for details." "MAIN"
 
 log_message "${LL0}" "Snapshot script completed." "MAIN"
+
+exit 0
+# EOF >>>
