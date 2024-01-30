@@ -94,7 +94,7 @@ SNAPSHOT_TO_REMOVE=""
 
 # Check for dependencies
 for cmd in "${DEPENDENCIES[@]}"; do
-  command -v "${cmd}" >/dev/null 2>&1 || { echo >&2 "Required command $cmd is not installed. Aborting."; exit 1; }
+  command -v "${cmd}" >/dev/null 2>&1 || { echo >&2 "Required command ${cmd} is not installed. Aborting."; exit 1; }
 done
 
 ### FUNCTIONS ###
@@ -172,7 +172,7 @@ confirm_action() {
 
 set_snapshot_size() {
   # Retrieve the size of ubuntu-lv in megabytes (MB) and remove the 'm' character
-  local size=$(lvs --noheadings --units m --options LV_SIZE ubuntu-vg/ubuntu-lv | tr -d '[:space:]m' || { lprompt "${LL2}" "${LL2}: Could not get size of active logical volume. Exiting."; exit 1; })
+  local size=$(lvs --noheadings --units m --options LV_SIZE ${VG_NAME}/${LV_NAME} | tr -d '[:space:]m' || { lprompt "${LL2}" "${LL2}: Could not get size of active logical volume. Exiting."; exit 1; })
   local ssize=$(echo "$size * 0.025" | bc || { lprompt "${LL2}" "${LL2}: Could not set size for snapshot. Exiting."; exit 1; })
   
   log_message "${LL0}" "Snapshot size set to ${ssize}M." "${FUNCNAME[0]}"
@@ -212,7 +212,7 @@ get_oldest_snapshot() {
   else
     # Get the oldest snapshot from lvs
     local oldest_snapshot=$(lvs --sort=-lv_time --row -o lv_name "${VG_NAME}" | awk '/ / {print $(NF-1)}' || { lprompt "${LL2}" "${LL2}: Could not get list of logical volumes. Exiting."; exit 1; })
-    local lv_attributes=$(lvs --noheadings -o lv_attr $VG_NAME/$oldest_snapshot | awk '{print $1}')
+    local lv_attributes=$(lvs --noheadings -o lv_attr ${VG_NAME}/${oldest_snapshot} | awk '{print $1}')
     if [[ "$LV_NAME" == "$oldest_snapshot" ]] && [[ "${lv_attributes:0:1}" == "o" ]]; then
       SNAPSHOT_TO_REMOVE=None
       log_message "${LL0}" "Oldest snapshot: ${SNAPSHOT_TO_REMOVE}. Removing a snapshot that is currently in use would not be wise." "${FUNCNAME[0]}"
@@ -233,7 +233,7 @@ retire_old_snapshots() {
   local used_space_percentage=$(df -h . | awk 'NR==2 { sub("%", "", $5); print $5 }')
   local oldest_snapshot="/dev/${VG_NAME}/${SNAPSHOT_TO_REMOVE}"
   local old_snapshots=$(lvs --noheadings -o lv_name --sort lv_time | grep 'ubuntu-lv_' | head -n 10 || { lprompt "${LL2}" "${LL2}: Could not get list of logical volumes. Exiting."; exit 1; })
-  local total_snapshots=$(echo "$old_snapshots" | wc -l)
+  local total_snapshots=$(echo "${old_snapshots}" | wc -l)
 
   # Check if the used space percentage is less than or equal to the threshold
   if [ "${used_space_percentage}" -ge "${THRESHOLD}" ]; then
@@ -252,7 +252,7 @@ retire_old_snapshots() {
     confirm_action "Are you sure you want to remove the 10 oldest snapshots?" || return
     lprompt "${LL0}" "Removing the 10 oldest snapshots..."
     for snapshot in $old_snapshots; do
-      local lv_attributes=$(lvs --noheadings -o lv_attr $VG_NAME/$snapshot | awk '{print $1}' || { lprompt "${LL2}" "${LL2}: Could not get list of logical volumes. Exiting."; exit 1; })
+      local lv_attributes=$(lvs --noheadings -o lv_attr ${VG_NAME}/${snapshot} | awk '{print $1}' || { lprompt "${LL2}" "${LL2}: Could not get list of logical volumes. Exiting."; exit 1; })
       if [ "$snapshot" != "$LV_NAME" ] && [[ "${lv_attributes:0:1}" != "o" ]]; then
         lprompt "${LL0}" "$(lvremove -f /dev/${VG_NAME}/${snapshot})"
       fi
