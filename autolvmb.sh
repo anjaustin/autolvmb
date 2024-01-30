@@ -256,12 +256,12 @@ retire_old_snapshots() {
     lprompt "${LL0}" "Removing the 10 oldest snapshots..."
     for snapshot in $old_snapshots; do
       local lv_attributes=$(lvs --noheadings -o lv_attr ${VG_NAME}/${snapshot} | awk '{print $1}' || { lprompt "${LL2}" "${LL2}: Could not get list of logical volumes. Exiting."; exit 1; })
-      if [ "$snapshot" != "$LV_NAME" ] && [[ "${lv_attributes:0:1}" != "o" ]]; then
+      if [ "$snapshot" != "$LV_NAME" ] && [[ "${lv_attributes:0:1}" == "s" ]]; then
         lprompt "${LL0}" "$(lvremove -f /dev/${VG_NAME}/${snapshot})"
       fi
     done
-  elif [ "$total_snapshots" -l3 33 ]; then
-    lprompt "${LL0}" "There less than 30 snapshots of the active logical volume. No snapshots need to be retired at this time."
+  elif [ "$total_snapshots" -le 33 ]; then
+    lprompt "${LL0}" "There less than 33 snapshots of the open logical volume. No snapshots need to be retired at this time."
   else
     lprompt "${LL0}" "At ${used_space_percentage}%, used space is less than ${THRESHOLD}% of the total volume size. No snapshots need to be retired at this time."
   fi
