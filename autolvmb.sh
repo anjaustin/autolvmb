@@ -106,10 +106,11 @@ log_message() {
   local log_file="${LOG_DIR}/${LV_NAME}_${datestamp}.log"
   local log_level="$1"
   local message="$2"
+  local function_name="$3"
   LOG_FILE="${log_file}"
 
   # Log the message with timestamp and log level
-  local log_entry="[${timestamp}] >< [${log_level}] : ${message}"
+  local log_entry="[${timestamp}] >< [${log_level}] > ${function_name} < ${message}"
 
   # Append the log entry to the log file
   echo -e "${log_entry}" | tee -a "${log_file}" > /dev/null
@@ -117,14 +118,15 @@ log_message() {
 
 # Print prompts (and logs if DEBUG=1) to terminal and log messages
 lprompt() {
+  local function_name="${FUNCNAME[1]}"
   local log_level="$1"
   local message="$2"
 
   # Print both log entry with prompts if DEBUG is 1
-  [ "$DEBUG" = "1" ] && echo -e "${log_level}: ${message}"
+  [ "$DEBUG" = "1" ] && echo -e "${function_name} > ${log_level} < ${message}"
 
   # Always prompt the user and log the activity
-  log_message "${log_level}" "${message}"
+  log_message "${log_level}" "${message}" "${function_name}"
   echo -e "${message}"
 }
 
@@ -156,7 +158,7 @@ make_logging() {
 }
 
 confirm_action() {
-  log_message "${LL0}" "$1"
+  log_message "${LL0}" "$1" "${FUNCNAME[0]}"
 
   while true; do
     read -p "$1 (y/n): " yn
@@ -170,15 +172,11 @@ confirm_action() {
 
 set_snapshot_size() {
   # Retrieve the size of ubuntu-lv in megabytes (MB) and remove the 'm' character
-  size=$(lvs --noheadings --units m --options LV_SIZE ubuntu-vg/ubuntu-lv | tr -d '[:space:]m' || { lprompt "${LL2}" "${LL2}: Could not get size of active logical volume. Exiting."; exit 1; })
-
-  ssize=$(echo "$size * 0.025" | bc || { lprompt "${LL2}" "${LL2}: Could not set size for snapshot. Exiting."; exit 1; })
-
-  log_message "${LL0}" "Snapshot size set to ${ssize}M."
-
-  # Calculate 2.5% of this size and echo it
-  ssize=$(echo "$ssize" | cut -d. -f1)
-
+  local size=$(lvs --noheadings --units m --options LV_SIZE ubuntu-vg/ubuntu-lv | tr -d '[:space:]m' || { lprompt "${LL2}" "${LL2}: Could not get size of active logical volume. Exiting."; exit 1; })
+  local ssize=$(echo "$size * 0.025" | bc || { lprompt "${LL2}" "${LL2}: Could not set size for snapshot. Exiting."; exit 1; })
+  
+  log_message "${LL0}" "Snapshot size set to ${ssize}M." "${FUNCNAME[0]}"
+  local ssize=$(echo "$ssize" | cut -d. -f1)
   echo $ssize
 }
 
@@ -190,7 +188,7 @@ create_snapshot() {
   local SNAPSHOT_SIZE="$(set_snapshot_size)"
 
   # Create the snapshot
-  lprompt "${LL0}" "$(lvcreate --size $SNAPSHOT_SIZE --snapshot --name $SNAPSHOT_NAME $SNAPSHOT_DEVICE)"
+  lprompt "${LL0}" "$(lvcreate --size ${SNAPSHOT_SIZE} --snapshot --name ${SNAPSHOT_NAME} ${SNAPSHOT_DEVICE})"
 
   # Check if the snapshot creation was successful
   if [ $? -eq 0 ]; then
@@ -203,34 +201,39 @@ create_snapshot() {
 
 get_oldest_snapshot() {
   # Get the list of logical volumes along with their creation times
-  lv_count=$(lvs --noheadings --sort=-lv_time -o lv_name "${VG_NAME}" | wc -l || { lprompt "${LL2}" "${LL2}: Could not get list of logical volumes. Exiting."; exit 1; })
+  local lv_count=$(lvs --noheadings --sort=-lv_time -o lv_name "${VG_NAME}" | wc -l || { lprompt "${LL2}" "${LL2}: Could not get list of logical volumes. Exiting."; exit 1; })
 
-  # If there's only one LV, you might choose to handle it differently
+  # If there's only one LV, or if the only LV is the active logical volume set SNAPSHOT_TO_REMOVE to None.
   if [ "$lv_count" -le 1 ]; then
-    log_message "${LL0}" "Only one logical volume present. Nothing to compare."
-
-    if [ "$LV_NAME" == "$oldest_snapshot" ]; then
-      log_message "${LL1}" "Only the active logical volume, ${SNAPSHOT_DEVICE}, exists. No snapshots detected."
-    fi
+    log_message "${LL0}" "Only one logical volume exists in the volume group ${VG_NAME}." "${FUNCNAME[0]}"
+    log_message "${LL1}" "Only the active logical volume, ${SNAPSHOT_DEVICE}, exists. No snapshots detected." "${FUNCNAME[0]}"
+    SNAPSHOT_TO_REMOVE=None
+    log_message "${LL0}" "Oldest snapshot: ${SNAPSHOT_TO_REMOVE}" "${FUNCNAME[0]}"
   else
-    # Process the list to find the oldest snapshot
+    # Get the oldest snapshot from lvs
     local oldest_snapshot=$(lvs --sort=-lv_time --row -o lv_name "${VG_NAME}" | awk '/ / {print $(NF-1)}' || { lprompt "${LL2}" "${LL2}: Could not get list of logical volumes. Exiting."; exit 1; })
-
-    # Set snapshot to be retired if need be
-    SNAPSHOT_TO_REMOVE=$oldest_snapshot
-
-    # Output the oldest snapshot
-    log_message "${LL0}" "Oldest snapshot: ${oldest_snapshot}"
+    local lv_attributes=$(lvs --noheadings -o lv_attr $VG_NAME/$oldest_snapshot | awk '{print $1}')
+    if [[ "$LV_NAME" == "$oldest_snapshot" ]] && [[ "${lv_attributes:0:1}" == "o" ]]; then
+      SNAPSHOT_TO_REMOVE=None
+      log_message "${LL0}" "Oldest snapshot: ${SNAPSHOT_TO_REMOVE}. Removing a snapshot that is currently in use would not be wise." "${FUNCNAME[0]}"
+    else
+      SNAPSHOT_TO_REMOVE="${oldest_snapshot}"
+      log_message "${LL0}" "Oldest snapshot: ${SNAPSHOT_TO_REMOVE}" "${FUNCNAME[0]}"
+    fi
   fi
 }
 
 # Housekeeping
 retire_old_snapshots() {
+  if [ $SNAPSHOT_TO_REMOVE == None ]; then
+    lprompt "$LL0" "No snapshots exist. Nothing to remove."
+    exit 0
+  fi
   # Get the free space information for the current volume and extract the free space percentage
   local used_space_percentage=$(df -h . | awk 'NR==2 { sub("%", "", $5); print $5 }')
   local oldest_snapshot="/dev/${VG_NAME}/${SNAPSHOT_TO_REMOVE}"
-  local total_snapshots=$(echo "$old_snapshots" | wc -l)
   local old_snapshots=$(lvs --noheadings -o lv_name --sort lv_time | grep 'ubuntu-lv_' | head -n 10 || { lprompt "${LL2}" "${LL2}: Could not get list of logical volumes. Exiting."; exit 1; })
+  local total_snapshots=$(echo "$old_snapshots" | wc -l)
 
   # Check if the used space percentage is less than or equal to the threshold
   if [ "${used_space_percentage}" -ge "${THRESHOLD}" ]; then
@@ -238,9 +241,10 @@ retire_old_snapshots() {
 
     # Check if an oldest file exists and retire it
     if [ -b "${oldest_snapshot}" ]; then
+      lprompt "${LL0}" "$(lvs ${VG_NAME}/${oldest_snapshot} && lvs -o lv_time ${VG_NAME}/${oldest_snapshot})"
       confirm_action "Are you sure you want to remove snapshot ${oldest_snapshot}?" || return
       lprompt "${LL0}" "Removing the oldest snapshot: ${oldest_snapshot}"
-      lvremove "${oldest_snapshot}"
+      lvremove -f "${oldest_snapshot}"
     else
       lprompt "${LL1}" "No matching snapshots were found."
     fi
@@ -248,7 +252,10 @@ retire_old_snapshots() {
     confirm_action "Are you sure you want to remove the 10 oldest snapshots?" || return
     lprompt "${LL0}" "Removing the 10 oldest snapshots..."
     for snapshot in $old_snapshots; do
-      lvremove -f "${snapshot}"
+      local lv_attributes=$(lvs --noheadings -o lv_attr $VG_NAME/$snapshot | awk '{print $1}' || { lprompt "${LL2}" "${LL2}: Could not get list of logical volumes. Exiting."; exit 1; })
+      if [ "$snapshot" != "$LV_NAME" ] && [[ "${lv_attributes:0:1}" != "o" ]]; then
+        lprompt "${LL0}" "$(lvremove -f /dev/${VG_NAME}/${snapshot})"
+      fi
     done
   elif [ "$total_snapshots" -lt 30 ]; then
     lprompt "${LL0}" "There less than 30 snapshots of the active logical volume. No snapshots need to be retired at this time."
@@ -326,20 +333,20 @@ EOF
 done
 
 make_logging
-log_message "${LL0}" "Logging ready."
+log_message "${LL0}" "Logging ready." "MAIN"
 
-log_message "${LL0}" "Script execution started on $(hostname -f):$(pwd)."
+log_message "${LL0}" "Script execution started on $(hostname -f):$(pwd)." "MAIN"
 
-log_message "${LL0}" "Starting snapshot script..."
+log_message "${LL0}" "Starting snapshot script..." "MAIN"
 create_snapshot
-log_message "${LL0}" "Snapshot completed."
+log_message "${LL0}" "Snapshot completed." "MAIN"
 
-log_message "${LL0}" "Check for oldest snapshot..."
+log_message "${LL0}" "Check for oldest snapshot..." "MAIN"
 get_oldest_snapshot
-log_message "${LL0}" "Check for oldest snapshot completed."
+log_message "${LL0}" "Check for oldest snapshot completed." "MAIN"
 
-log_message "${LL0}" "Preparing to remove old snapshots if need..."
+log_message "${LL0}" "Preparing to remove old snapshots if need..." "MAIN"
 retire_old_snapshots
-log_message "${LL0}" "Check log file ${LOG_DIR}/${LOG_FILE} for details."
+log_message "${LL0}" "Check log file ${LOG_DIR}/${LOG_FILE} for details." "MAIN"
 
-log_message "${LL0}" "Snapshot script completed."
+log_message "${LL0}" "Snapshot script completed." "MAIN"
