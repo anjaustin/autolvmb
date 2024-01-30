@@ -60,7 +60,7 @@
 # -v, --version: Display script version.
 #
 # Examples:
-#   sudo ./autolvmb.sh
+#   sudo ./autolvmb.sh -h
 #   sudo ./autolvmb.sh --snapshot-name my-snapshot
 #   sudo ./autolvmb.sh --device my-vg/my-lv --snapshot-name my-snapshot
 #
@@ -76,6 +76,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 ### VARIABLES ###
+DEPENDENCIES=("bc" "awk" "vgs" "lvs" "lvcreate" "lvremove" "date" "sudo" "mkdir" "df" "hostname" "pwd")
 readonly VG_NAME="ubuntu-vg"
 readonly LV_NAME="ubuntu-lv"
 readonly THRESHOLD=25
@@ -88,6 +89,10 @@ LOG_DIR="/var/log/autolvmb"
 DEBUG=${DEBUG:-0} # Enable DEBUG mode (set to 1 to enable)
 LOG_FILE=""
 SNAPSHOT_TO_REMOVE=""
+
+for cmd in "${DEPENDENCIES[@]}"; do
+    command -v "${cmd}" >/dev/null 2>&1 || { echo >&2 "Required command $cmd is not installed. Aborting."; exit 1; }
+done
 
 ### FUNCTIONS ###
 # Script logging
@@ -104,7 +109,7 @@ log_message() {
   local log_entry="[${timestamp}] >< [${log_level}] : ${message}"
 
   # Append the log entry to the log file
-  echo -e "$log_entry" | sudo tee -a "$log_file" > /dev/null
+  echo -e "${log_entry}" | sudo tee -a "${log_file}" > /dev/null
 }
 
 # Print prompts (and logs if DEBUG=1) to terminal and log messages
@@ -128,10 +133,10 @@ make_logging() {
 
   # Create log directory if it doesn't exist
   if [ ! -d "$LOG_DIR" ]; then
-    local make_log_dir=$(sudo mkdir -vp "${LOG_DIR}" || { lprompt "${LL[2]}" "${LL[2]}: Could not create log directory. Exiting."; exit 1; })
+    local make_log_directory=$(mkdir -vp "${LOG_DIR}" || { lprompt "${LL[2]}" "${LL[2]}: Could not create log directory. Exiting."; exit 1; })
 
     if [ "$make_log_directory" != "" ]; then
-      lprompt "${LL[0]}" "Log directory created -> ${make_log_dir}"
+      lprompt "${LL[0]}" "Log directory created -> ${make_log_directory}"
     else
       echo -e "${LL[2]}" "Failed to create log directory."
       exit 1
@@ -148,7 +153,7 @@ make_logging() {
 }
 
 confirm_action() {
-  lprompt "${LL[0]}" "$1"
+  log_message "${LL[0]}" "$1"
 
   while true; do
     read -p "$1 (y/n): " yn
@@ -166,7 +171,7 @@ set_snapshot_size() {
 
   ssize=$(echo "$size * 0.025" | bc)
 
-  lprompt "${LL[0]}" "Snapshot size set to ${ssize}M."
+  log_message "${LL[0]}" "Snapshot size set to ${ssize}M."
 
   # Calculate 2.5% of this size and echo it
   echo $ssize
@@ -177,7 +182,7 @@ create_snapshot() {
   confirm_action "Are you sure you want to create a snapshot?" || return
 
   # Call set_snapshot_size and capture the output
-  local SNAPSHOT_SIZE="$(set_snapshot_size)M"
+  local SNAPSHOT_SIZE="$(echo $(set_snapshot_size) | cut -d. -f1)M"
 
   # Create the snapshot
   lprompt "${LL[0]}" "$(lvcreate --size $SNAPSHOT_SIZE --snapshot --name $SNAPSHOT_NAME $SNAPSHOT_DEVICE)"
