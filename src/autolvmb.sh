@@ -151,7 +151,6 @@ EOF
         exit 0
         ;;
       -nim|--non-interactive-mode)
-        shift
         NIM="y"
         ;;
       -n|--snapshot-name)
@@ -242,17 +241,19 @@ make_logging() {
 
 ##> User Confirmation <##
 confirm_action() {
-  ## Get user confirmation if in interactive mode
-  log_message "${LL0}" "$1" "${FUNCNAME[0]}"
+  if [ "$NIM" == "n" ]; then
+    ## Get user confirmation if in interactive mode
+    log_message "${LL0}" "$1" "${FUNCNAME[0]}"
 
-  while true; do
-    read -p "$1 (y/n): " yn
-    case $yn in
-      [Yy]* ) break;;
-      [Nn]* ) lprompt "${LL1}" "Action cancelled by user."; return 1;;
-      * ) lprompt "${LL0}" "Please answer Y for yes or N for no.";;
-    esac
-  done
+    while true; do
+      read -p "$1 (y/n): " yn
+      case $yn in
+        [Yy]* ) break;;
+        [Nn]* ) lprompt "${LL1}" "Action cancelled by user."; return 1;;
+        * ) lprompt "${LL0}" "Please answer Y for yes or N for no.";;
+      esac
+    done
+  fi
 }
 
 ##> Prepare To Set Snapshot <##
@@ -326,8 +327,16 @@ retire_old_snapshots() {
   # Get the free space information for the current volume and extract the free space percentage
   local used_space_percentage=$(df -h . | awk 'NR==2 { sub("%", "", $5); print $5 }')
   local oldest_snapshot="/dev/${VG_NAME}/${SNAPSHOT_TO_REMOVE}"
-  local old_snapshots=$(lvs --noheadings -o lv_name --sort lv_time | grep 'ubuntu-lv_' | head -n 16 || { lprompt "${LL2}" "${LL2}: Could not get list of logical volumes. Exiting."; exit 1; })
-  local total_snapshots=$(echo "${old_snapshots}" | wc -l)
+  local all_snapshots=$(lvs --noheadings -o lv_name --sort lv_time | grep 'ubuntu-lv_' || { lprompt "${LL2}" "${LL2}: Could not get list of logical volumes. Exiting."; exit 1; })
+  local total_snapshots=$(echo "$all_snapshots" | wc -l || echo 0)
+  local excess_count=$((total_snapshots - 33))
+
+  # If there are more than 33 snapshots, get only the excess snapshots
+  if [ "$excess_count" -gt 0 ]; then
+    old_snapshots=$(echo "$all_snapshots" | head -n "$excess_count")
+  else
+    old_snapshots=""
+  fi
 
   # Remove oldest snapshot if the used space percentage is less than or equal to the threshold
   if [ "${used_space_percentage}" -ge "${THRESHOLD}" ]; then
@@ -351,13 +360,16 @@ retire_old_snapshots() {
   # Remove the last 16 snapshots if there are more than 32 snapshots
   if [ "$total_snapshots" -ge 34 ]; then # Set to 34 to account for the origin/open LV
     confirm_action "Are you sure you want to remove the 10 oldest snapshots?" || return
-    lprompt "${LL0}" "Removing the 10 oldest snapshots..."
-    for snapshot in $old_snapshots; do
-      local lv_attributes=$(lvs --noheadings -o lv_attr ${VG_NAME}/${snapshot} | awk '{print $1}' || { lprompt "${LL2}" "${LL2}: Could not get list of logical volumes. Exiting."; exit 1; })
+    lprompt "${LL0}" "Removing snapshots..."
+    while [[ "$total_snapshots" -ge 34 ]]; do
+      total_snapshots=$(echo "${old_snapshots}" | wc -l)
+      for snapshot in $old_snapshots; do
+        local lv_attributes=$(lvs --noheadings -o lv_attr ${VG_NAME}/${snapshot} | awk '{print $1}' || { lprompt "${LL2}" "${LL2}: Could not get list of logical volumes. Exiting."; exit 1; })
 
-      if [ "$snapshot" != "$LV_NAME" ] && [[ "${lv_attributes:0:1}" == "s" ]]; then
-        lprompt "${LL0}" "$(lvremove -f /dev/${VG_NAME}/${snapshot})"
-      fi
+        if [ "$snapshot" != "$LV_NAME" ] && [[ "${lv_attributes:0:1}" == "s" ]]; then
+          lprompt "${LL0}" "$(lvremove -f /dev/${VG_NAME}/${snapshot})"
+        fi
+      done
     done
   else
     lprompt "${LL0}" "There less than 33 snapshots of the open logical volume. No snapshots need to be retired at this time."
@@ -372,7 +384,7 @@ i_am_root
 check_dependencies
 
 # Check command line arguments
-check_command_args
+check_command_args "$@"
 
 # Prepare logging
 make_logging
