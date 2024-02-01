@@ -54,6 +54,7 @@
 # -h, --help: Display help message and exit.
 # -g, --get-groups: List available volume groups.
 # -l, --list-volumes: List available logical volumes.
+# -nim, --non-interactive-mode Run in non-interactive mode.
 # -n, --snapshot-name: Set custom name for the snapshot.
 # -k, --snapshot-keep-count: Define how many snapshots to retain.
 # -d, --device: Specify the device for snapshot creation.
