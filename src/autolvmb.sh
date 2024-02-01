@@ -69,7 +69,7 @@
 # the project's GitHub repository. https://github.com/anjaustin/autolvmb
 ################################################################################
 
-### VARIABLES ###
+###> VARIABLES <###
 DEPENDENCIES=("bc" "awk" "vgs" "lvs" "lvcreate" "lvremove" "date" "sudo" "mkdir" "df" "hostname" "pwd")
 readonly VG_NAME="ubuntu-vg"
 readonly LV_NAME="ubuntu-lv"
@@ -86,7 +86,7 @@ DEBUG=${DEBUG:-0} # Enable DEBUG mode (set to 1 to enable)
 LOG_FILE=""
 SNAPSHOT_TO_REMOVE=""
 
-### FUNCTIONS ###
+###> FUNCTIONS <###
 i_am_root() {
   # Check for root privileges
   if [ "$(id -u)" -ne 0 ]; then
@@ -172,7 +172,7 @@ EOF
   done
 }
 
-## Script Logging ##
+##> Script Logging <##
 log_message() {
   ## Make a log
   # Prep time and data stamps, and capture log level, message and function name, and set log file
@@ -233,7 +233,7 @@ make_logging() {
   fi
 }
 
-## User Confirmation ##
+##> User Confirmation <##
 confirm_action() {
   ## Get user confirmation if in interactive mode
   log_message "${LL0}" "$1" "${FUNCNAME[0]}"
@@ -248,7 +248,7 @@ confirm_action() {
   done
 }
 
-## Prepare To Set Snapshot ##
+##> Prepare To Set Snapshot <##
 set_snapshot_size() {
   ## Retrieve the size of ubuntu-lv in megabytes (MB) and remove the 'm' character, and set snapshot size
   local size=$(lvs --noheadings --units m --options LV_SIZE ${VG_NAME}/${LV_NAME} | tr -d '[:space:]m' || { lprompt "${LL2}" "${LL2}: Could not get size of active logical volume. Exiting."; exit 1; })
@@ -259,7 +259,7 @@ set_snapshot_size() {
   echo $ssize
 }
 
-## Generate Snapshot of LV ##
+##> Generate Snapshot of LV <##
 create_snapshot() {
   confirm_action "Are you sure you want to create a snapshot?" || return
 
@@ -278,7 +278,7 @@ create_snapshot() {
   fi
 }
 
-## Prepare Garbage Collection ##
+##> Prepare Garbage Collection <##
 get_oldest_snapshot() {
   # Get the list of logical volumes along with their creation times
   local lv_count=$(lvs --noheadings --sort=-lv_time -o lv_name "${VG_NAME}" | wc -l || { lprompt "${LL2}" "${LL2}: Could not get list of logical volumes. Exiting."; exit 1; })
@@ -307,7 +307,7 @@ get_oldest_snapshot() {
   fi
 }
 
-## Housekeeping ##
+##> Housekeeping <##
 retire_old_snapshots() {
   ## Retire old snapshots
   # End program if nothing to remove.
@@ -357,7 +357,7 @@ retire_old_snapshots() {
   fi
 }
 
-### MAIN ###
+###> MAIN <###
 # Check if script is running as sudo or root
 i_am_root
 
@@ -388,4 +388,4 @@ log_message "${LL0}" "Check log file ${LOG_DIR}/${LOG_FILE} for details." "MAIN"
 log_message "${LL0}" "Snapshot script completed." "MAIN"
 
 exit 0
-# EOF >>>
+#> EOF <#
