@@ -47,6 +47,6 @@ Contributions and feedback are welcome. Please reach out or contribute via the p
 This script is licensed under the [MIT License](https://tripp.mit-license.org/).
 
 ## Author
-- Aaron `Tripp` N. Josserand Austin, via Z Tangerine
+- Aaron `Tripp` N. Josserand Austin, via Z Tangerine, LLC
 
 ---
