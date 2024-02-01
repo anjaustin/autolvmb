@@ -4,7 +4,7 @@
 # autolvmb.sh
 ################################################################################
 # Author: Aaron `Tripp` N. Josserand Austin
-# Version: v0.0.444-alpha
+# Version: v0.0.528-alpha
 # Originated: 27-JAN-2024
 ################################################################################
 # MIT License
@@ -74,7 +74,7 @@ DEPENDENCIES=("bc" "awk" "vgs" "lvs" "lvcreate" "lvremove" "date" "sudo" "mkdir"
 readonly VG_NAME="ubuntu-vg"
 readonly LV_NAME="ubuntu-lv"
 readonly THRESHOLD=25
-readonly VERSION="v0.0.444-alpha"
+readonly VERSION="v0.0.528-alpha"
 readonly LL0="INFO"
 readonly LL1="WARNING"
 readonly LL2="ERROR"
