@@ -287,7 +287,7 @@ Options:
   -v, --version                     Display version information.
 
 Examples:
-  ./autolvmb.sh
+  sudo ./autolvmb.sh
   sudo ./autolvmb.sh --snapshot-name my-snapshot
   sudo ./autolvmb.sh --device my-vg/my-lv --snapshot-name my-snapshot
 
