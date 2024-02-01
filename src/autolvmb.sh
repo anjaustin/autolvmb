@@ -373,19 +373,24 @@ log_message "${LL0}" "Logging ready." "MAIN"
 
 log_message "${LL0}" "Script execution started on $(hostname -f):$(pwd)." "MAIN"
 
+# Take a picture
 log_message "${LL0}" "Starting snapshot script..." "MAIN"
 create_snapshot
 log_message "${LL0}" "Snapshot completed." "MAIN"
 
+# Check for older pitcures
 log_message "${LL0}" "Check for oldest snapshot..." "MAIN"
 get_oldest_snapshot
 log_message "${LL0}" "Check for oldest snapshot completed." "MAIN"
 
+# Burn 'em
 log_message "${LL0}" "Preparing to remove old snapshots if need..." "MAIN"
 retire_old_snapshots
 log_message "${LL0}" "Check log file ${LOG_DIR}/${LOG_FILE} for details." "MAIN"
 
+# All done!
 log_message "${LL0}" "Snapshot script completed." "MAIN"
 
+# Adios!
 exit 0
 #> EOF <#
