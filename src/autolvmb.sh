@@ -78,8 +78,9 @@ readonly VERSION="v0.0.444-alpha"
 readonly LL0="INFO"
 readonly LL1="WARNING"
 readonly LL2="ERROR"
-SNAPSHOT_NAME=${SNAPSHOT_NAME:-"${LV_NAME}_$(date +%Y%m%d_%H%M%S)"}
-SNAPSHOT_DEVICE=${SNAPSHOT_DEVICE:-"/dev/${VG_NAME}/${LV_NAME}"}
+NIM="${NIM:-n}"
+SNAPSHOT_NAME="${SNAPSHOT_NAME:-${LV_NAME}_$(date +%Y%m%d_%H%M%S)}"
+SNAPSHOT_DEVICE="${SNAPSHOT_DEVICE:-/dev/${VG_NAME}/${LV_NAME}}"
 SNAPSHOT_KEEP_COUNT=${SNAPSHOT_KEEP_COUNT:-30}
 LOG_DIR="/var/log/autolvmb"
 DEBUG=${DEBUG:-0} # Enable DEBUG mode (set to 1 to enable)
@@ -147,6 +148,10 @@ EOF
         lvs
         exit 0
         ;;
+      -nim|--non-interactive-mode)
+        shift
+        NIM="y"
+        ;;
       -n|--snapshot-name)
         shift
         SNAPSHOT_NAME="$1"
@@ -161,7 +166,7 @@ EOF
         ;;
       -v|--version)
         echo "$VERSION"
-        exit
+        exit 0
         ;;
       *)
         echo "Invalid option. Use -h or --help for usage information."
