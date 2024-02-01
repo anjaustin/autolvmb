@@ -69,12 +69,6 @@
 # the project's GitHub repository. https://github.com/anjaustin/autolvmb
 ################################################################################
 
-# Check if the script is run as root
-if [ "$(id -u)" -ne 0 ]; then
-  echo "This script must be run as root. Please use sudo."
-  exit 1
-fi
-
 ### VARIABLES ###
 DEPENDENCIES=("bc" "awk" "vgs" "lvs" "lvcreate" "lvremove" "date" "sudo" "mkdir" "df" "hostname" "pwd")
 readonly VG_NAME="ubuntu-vg"
@@ -92,12 +86,92 @@ DEBUG=${DEBUG:-0} # Enable DEBUG mode (set to 1 to enable)
 LOG_FILE=""
 SNAPSHOT_TO_REMOVE=""
 
-# Check for dependencies
-for cmd in "${DEPENDENCIES[@]}"; do
-  command -v "${cmd}" >/dev/null 2>&1 || { echo >&2 "Required command ${cmd} is not installed. Aborting."; exit 1; }
-done
-
 ### FUNCTIONS ###
+i_am_root() {
+  # Check if the script is run as root
+  if [ "$(id -u)" -ne 0 ]; then
+    echo "This script must be run as root. Please use sudo."
+    exit 1
+  fi
+}
+
+check_dependencies() {
+  # Check for dependencies
+  for cmd in "${DEPENDENCIES[@]}"; do
+    command -v "${cmd}" >/dev/null 2>&1 || { echo >&2 "Required command ${cmd} is not installed. Aborting."; exit 1; }
+  done
+}
+
+check_command_args() {
+  # Parse command-line options
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help)
+        # Display usage information
+        cat <<EOF
+Usage: [sudo] $0 [-h|--help] [-v|--version] [-n|--snapshot-name NAME] [-k|--snapshot-keep-count 30] [-d|--device DEVICE PATH] ...
+
+Create a snapshot of a logical volume.
+
+Options:
+  -h, --help                        Display this help message and exit.
+  -g, --get-groups                  List availavble volume groups.
+  -l, --list-volumes                List the available logical volumes.
+  -n, --snapshot-name NAME          Set the name for the snapshot. Default is "backup-snapshot".
+  -k, --snapshot-keep-count INTEGER Set the number of snapshots to keep. Snapshots in excess of this number will be removed. Default is 30.
+  -d, --device DEVICE               Set the device you wish to snapshot. Default is "/dev/ubuntu-vg/ubuntu-lv".
+  -v, --version                     Display version information.
+
+Examples:
+  sudo ./autolvmb.sh
+  sudo ./autolvmb.sh --snapshot-name my-snapshot
+  sudo ./autolvmb.sh --device my-vg/my-lv --snapshot-name my-snapshot
+
+Requirements:
+  - This script selectively requires elevated privileges. You can run it with 'sudo' for your convenience.
+  - Dependencies: lvm2 (for lvcreate, lvs, lvremove).
+
+How to Run:
+  1. Make the script executable: chmod u+x $0
+  2. Run the script: [sudo] $0
+  3. Optionally, specify snapshot name and device.
+
+EOF
+        exit 0
+        ;;
+      -g|--get-groups)
+        vgs
+        exit 0
+        ;;
+      -l|--list-volumes)
+        lvs
+        exit 0
+        ;;
+      -n|--snapshot-name)
+        shift
+        SNAPSHOT_NAME="$1"
+        ;;
+      -k|--snapshot-keep-count)
+        shift
+        SNAPSHOT_KEEP_COUNT="$1"
+        ;;
+      -d|--device)
+        shift
+        SNAPSHOT_DEVICE="$1"
+        ;;
+      -v|--version)
+        echo "$VERSION"
+        exit
+        ;;
+      *)
+        echo "Invalid option. Use -h or --help for usage information."
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
 # Script logging
 log_message() {
   # Define log directory and file path
@@ -267,74 +341,17 @@ retire_old_snapshots() {
   fi
 }
 
-# Parse command-line options
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    -h|--help)
-      # Display usage information
-      cat <<EOF
-Usage: [sudo] $0 [-h|--help] [-v|--version] [-n|--snapshot-name NAME] [-k|--snapshot-keep-count 30] [-d|--device DEVICE PATH] ...
+### MAIN ###
+# Check if script is running as sudo or root
+i_am_root
 
-Create a snapshot of a logical volume.
+# Check for script dependencies
+check_dependencies
 
-Options:
-  -h, --help                        Display this help message and exit.
-  -g, --get-groups                  List availavble volume groups.
-  -l, --list-volumes                List the available logical volumes.
-  -n, --snapshot-name NAME          Set the name for the snapshot. Default is "backup-snapshot".
-  -k, --snapshot-keep-count INTEGER Set the number of snapshots to keep. Snapshots in excess of this number will be removed. Default is 30.
-  -d, --device DEVICE               Set the device you wish to snapshot. Default is "/dev/ubuntu-vg/ubuntu-lv".
-  -v, --version                     Display version information.
+# Check command line arguments
+check_command_args
 
-Examples:
-  sudo ./autolvmb.sh
-  sudo ./autolvmb.sh --snapshot-name my-snapshot
-  sudo ./autolvmb.sh --device my-vg/my-lv --snapshot-name my-snapshot
-
-Requirements:
-  - This script selectively requires elevated privileges. You can run it with 'sudo' for your convenience.
-  - Dependencies: lvm2 (for lvcreate, lvs, lvremove).
-
-How to Run:
-  1. Make the script executable: chmod u+x $0
-  2. Run the script: [sudo] $0
-  3. Optionally, specify snapshot name and device.
-
-EOF
-      exit 0
-      ;;
-    -g|--get-groups)
-      vgs
-      exit 0
-      ;;
-    -l|--list-volumes)
-      lvs
-      exit 0
-      ;;
-    -n|--snapshot-name)
-      shift
-      SNAPSHOT_NAME="$1"
-      ;;
-    -k|--snapshot-keep-count)
-      shift
-      SNAPSHOT_KEEP_COUNT="$1"
-      ;;
-    -d|--device)
-      shift
-      SNAPSHOT_DEVICE="$1"
-      ;;
-    -v|--version)
-      echo "$VERSION"
-      exit
-      ;;
-    *)
-      echo "Invalid option. Use -h or --help for usage information."
-      exit 1
-      ;;
-  esac
-  shift
-done
-
+# Prepare logging
 make_logging
 log_message "${LL0}" "Logging ready." "MAIN"
 
