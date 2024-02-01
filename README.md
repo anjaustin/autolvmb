@@ -3,7 +3,7 @@
 ## Overview
 `autolvmb.sh` is a Bash script designed to automate the management of logical volume (LV) snapshots in LVM2 managed systems, primarily targeting Ubuntu-like distributions. It dynamically calculates snapshot sizes, creates snapshots with user-defined names, and automatically removes the oldest snapshots based on predefined conditions.
 
-### Version: v0.0.444-alpha
+### Version: v0.0.528-alpha
 
 ## Compatibility
 - Developed and tested on Ubuntu Server 22.04 LTS
@@ -12,6 +12,7 @@
 ## Features
 - Dynamically calculates and sets the size for new snapshots.
 - Creates snapshots with optional user-defined names.
+- Non-interactive mode for script automation.
 - Automatically identifies and removes the oldest snapshots when their number exceeds a user-defined threshold.
 - Interactive confirmation prompts for critical actions to prevent accidental data loss.
 - Comprehensive logging of actions and system status for better traceability and debugging.
@@ -25,6 +26,7 @@
 - `-h`, `--help`: Display help message and exit.
 - `-g`, `--get-groups`: List available volume groups.
 - `-l`, `--list-volumes`: List available logical volumes.
+- `-nim`, `--non-interactive-mode`: For use with `crontab` or other means of automation.
 - `-n`, `--snapshot-name NAME`: Set custom name for the snapshot.
 - `-k`, `--snapshot-keep-count COUNT`: Define how many snapshots to retain.
 - `-d`, `--device DEVICE`: Specify the device for snapshot creation.
@@ -45,6 +47,6 @@ Contributions and feedback are welcome. Please reach out or contribute via the p
 This script is licensed under the [MIT License](https://tripp.mit-license.org/).
 
 ## Author
-- Aaron `Tripp` N. Josserand Austin
+- Aaron `Tripp` N. Josserand Austin, via Z Tangerine
 
 ---

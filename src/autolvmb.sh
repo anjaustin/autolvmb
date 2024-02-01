@@ -110,7 +110,7 @@ check_command_args() {
       -h|--help)
         # Display usage information
         cat <<EOF
-Usage: [sudo] $0 [-h|--help] [-v|--version] [-n|--snapshot-name NAME] [-k|--snapshot-keep-count 30] [-d|--device DEVICE PATH] ...
+Usage: [sudo] $0 [-h|--help] [-v|--version] [-n|--snapshot-name NAME] [-k|--snapshot-keep-count 30] [-d|--device DEVICE PATH] [-nim|--non-interactive-mode]
 
 Create a snapshot of a logical volume.
 
@@ -118,6 +118,7 @@ Options:
   -h, --help                        Display this help message and exit.
   -g, --get-groups                  List availavble volume groups.
   -l, --list-volumes                List the available logical volumes.
+  -nim, --non-interactive-mode      Run in non-interactive mode for crontab or other means of automation.
   -n, --snapshot-name NAME          Set the name for the snapshot. Default is "backup-snapshot".
   -k, --snapshot-keep-count INTEGER Set the number of snapshots to keep. Snapshots in excess of this number will be removed. Default is 30.
   -d, --device DEVICE               Set the device you wish to snapshot. Default is "/dev/ubuntu-vg/ubuntu-lv".
