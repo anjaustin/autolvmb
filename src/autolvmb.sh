@@ -88,7 +88,7 @@ SNAPSHOT_TO_REMOVE=""
 
 ### FUNCTIONS ###
 i_am_root() {
-  # Check if the script is run as root
+  # Check for root privileges
   if [ "$(id -u)" -ne 0 ]; then
     echo "This script must be run as root. Please use sudo."
     exit 1
@@ -172,9 +172,10 @@ EOF
   done
 }
 
-# Script logging
+## Script Logging ##
 log_message() {
-  # Define log directory and file path
+  ## Make a log
+  # Prep time and data stamps, and capture log level, message and function name, and set log file
   local timestamp=$(date +"%Y-%m-%d | %H:%M:%S")
   local datestamp=$(date +"%Y-%m-%d")
   local log_file="${LOG_DIR}/${LV_NAME}_${datestamp}.log"
@@ -190,13 +191,14 @@ log_message() {
   echo -e "${log_entry}" | tee -a "${log_file}" > /dev/null
 }
 
-# Print prompts (and logs if DEBUG=1) to terminal and log messages
 lprompt() {
+  ## Print prompts (and logs if DEBUG=1) to terminal and log messages
+  # Capture parent function name, log level, and message
   local function_name="${FUNCNAME[1]}"
   local log_level="$1"
   local message="$2"
 
-  # Print both log entry with prompts if DEBUG is 1
+  # Print log entry with prompts if DEBUG is 1
   [ "$DEBUG" = "1" ] && echo -e "${function_name} > ${log_level} < ${message}"
 
   # Always prompt the user and log the activity
@@ -204,9 +206,9 @@ lprompt() {
   echo -e "${message}"
 }
 
-# Setup logging directory and initial log file
 make_logging() {
-  # Define log directory and file path
+  ## Setup logging directory and initial log file
+  # Set time stamp and log file path
   local datestamp=$(date +"%Y-%m-%d")
   local log_file="${LOG_DIR}/${LV_NAME}_${datestamp}.log"
 
@@ -222,7 +224,7 @@ make_logging() {
     fi
   fi
 
-  # Check if log file exists, create if not
+  # Check if log file exists, create if not, die if cannot
   if [ ! -f "${log_file}" ]; then
     touch "${log_file}" && lprompt "${LL0}" "${LL0}: Log file created." || { lprompt "${LL2}" "${LL2}: Could not create log file. Exiting."; exit 1; }
     lprompt "${LL0}" "$(chmod -v 644 ${log_file})" || { lprompt "${LL2}" "${LL2}: Could not chmod log file to 644. Exiting."; exit 1; }
@@ -231,7 +233,9 @@ make_logging() {
   fi
 }
 
+## User Confirmation ##
 confirm_action() {
+  ## Get user confirmation if in interactive mode
   log_message "${LL0}" "$1" "${FUNCNAME[0]}"
 
   while true; do
@@ -244,17 +248,18 @@ confirm_action() {
   done
 }
 
+## Prepare To Set Snapshot ##
 set_snapshot_size() {
-  # Retrieve the size of ubuntu-lv in megabytes (MB) and remove the 'm' character
+  ## Retrieve the size of ubuntu-lv in megabytes (MB) and remove the 'm' character, and set snapshot size
   local size=$(lvs --noheadings --units m --options LV_SIZE ${VG_NAME}/${LV_NAME} | tr -d '[:space:]m' || { lprompt "${LL2}" "${LL2}: Could not get size of active logical volume. Exiting."; exit 1; })
   local ssize=$(echo "$size * 0.025" | bc || { lprompt "${LL2}" "${LL2}: Could not set size for snapshot. Exiting."; exit 1; })
+  local ssize=$(echo "$ssize" | cut -d. -f1)
   
   log_message "${LL0}" "Snapshot size set to ${ssize}M." "${FUNCNAME[0]}"
-  local ssize=$(echo "$ssize" | cut -d. -f1)
   echo $ssize
 }
 
-# Generate lv snapshot
+## Generate Snapshot of LV ##
 create_snapshot() {
   confirm_action "Are you sure you want to create a snapshot?" || return
 
@@ -262,7 +267,7 @@ create_snapshot() {
   local SNAPSHOT_SIZE="$(set_snapshot_size)"
 
   # Create the snapshot
-  lprompt "${LL0}" "$(lvcreate --size ${SNAPSHOT_SIZE} --snapshot --name ${SNAPSHOT_NAME} ${SNAPSHOT_DEVICE})"
+  lprompt "${LL0}" "$(lvcreate --size ${SNAPSHOT_SIZE} --snapshot --name ${SNAPSHOT_NAME} ${SNAPSHOT_DEVICE} || { echo "${LL2}" "${LL2}: Could not create snapshot of logical volume. Exiting."; exit 1; })"
 
   # Check if the snapshot creation was successful
   if [ $? -eq 0 ]; then
@@ -273,36 +278,44 @@ create_snapshot() {
   fi
 }
 
+## Prepare Garbage Collection ##
 get_oldest_snapshot() {
   # Get the list of logical volumes along with their creation times
   local lv_count=$(lvs --noheadings --sort=-lv_time -o lv_name "${VG_NAME}" | wc -l || { lprompt "${LL2}" "${LL2}: Could not get list of logical volumes. Exiting."; exit 1; })
 
   # If there's only one LV, or if the only LV is the active logical volume set SNAPSHOT_TO_REMOVE to None.
   if [ "$lv_count" -le 1 ]; then
+    SNAPSHOT_TO_REMOVE=None
+
     log_message "${LL0}" "Only one logical volume exists in the volume group ${VG_NAME}." "${FUNCNAME[0]}"
     log_message "${LL1}" "Only the active logical volume, ${SNAPSHOT_DEVICE}, exists. No snapshots detected." "${FUNCNAME[0]}"
-    SNAPSHOT_TO_REMOVE=None
     log_message "${LL0}" "Oldest snapshot: ${SNAPSHOT_TO_REMOVE}" "${FUNCNAME[0]}"
   else
     # Get the oldest snapshot from lvs
     local oldest_snapshot=$(lvs --sort=-lv_time --row -o lv_name "${VG_NAME}" | awk '/ / {print $(NF-1)}' || { lprompt "${LL2}" "${LL2}: Could not get list of logical volumes. Exiting."; exit 1; })
     local lv_attributes=$(lvs --noheadings -o lv_attr ${VG_NAME}/${oldest_snapshot} | awk '{print $1}')
+
     if [[ "$LV_NAME" == "$oldest_snapshot" ]] && [[ "${lv_attributes:0:1}" == "o" ]]; then
       SNAPSHOT_TO_REMOVE=None
+
       log_message "${LL0}" "Oldest snapshot: ${SNAPSHOT_TO_REMOVE}. Removing a snapshot that is currently in use would not be wise." "${FUNCNAME[0]}"
     else
       SNAPSHOT_TO_REMOVE="${oldest_snapshot}"
+
       log_message "${LL0}" "Oldest snapshot: ${SNAPSHOT_TO_REMOVE}" "${FUNCNAME[0]}"
     fi
   fi
 }
 
-# Housekeeping
+## Housekeeping ##
 retire_old_snapshots() {
+  ## Retire old snapshots
+  # End program if nothing to remove.
   if [ $SNAPSHOT_TO_REMOVE == None ]; then
     lprompt "$LL0" "No snapshots exist. Nothing to remove."
     exit 0
   fi
+
   # Get the free space information for the current volume and extract the free space percentage
   local used_space_percentage=$(df -h . | awk 'NR==2 { sub("%", "", $5); print $5 }')
   local oldest_snapshot="/dev/${VG_NAME}/${SNAPSHOT_TO_REMOVE}"
@@ -316,7 +329,9 @@ retire_old_snapshots() {
     # Check if an oldest file exists and retire it
     if [ -b "${oldest_snapshot}" ]; then
       lprompt "${LL0}" "$(lvs ${VG_NAME}/${oldest_snapshot} && lvs -o lv_time ${VG_NAME}/${oldest_snapshot})"
+
       confirm_action "Are you sure you want to remove snapshot ${oldest_snapshot}?" || return
+
       lprompt "${LL0}" "Removing the oldest snapshot: ${oldest_snapshot}"
       lvremove -f "${oldest_snapshot}"
     else
@@ -332,6 +347,7 @@ retire_old_snapshots() {
     lprompt "${LL0}" "Removing the 10 oldest snapshots..."
     for snapshot in $old_snapshots; do
       local lv_attributes=$(lvs --noheadings -o lv_attr ${VG_NAME}/${snapshot} | awk '{print $1}' || { lprompt "${LL2}" "${LL2}: Could not get list of logical volumes. Exiting."; exit 1; })
+
       if [ "$snapshot" != "$LV_NAME" ] && [[ "${lv_attributes:0:1}" == "s" ]]; then
         lprompt "${LL0}" "$(lvremove -f /dev/${VG_NAME}/${snapshot})"
       fi
