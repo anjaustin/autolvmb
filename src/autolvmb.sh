@@ -262,7 +262,7 @@ set_snapshot_size() {
   local size=$(lvs --noheadings --units m --options LV_SIZE ${VG_NAME}/${LV_NAME} | tr -d '[:space:]m' || { lprompt "${LL2}" "${LL2}: Could not get size of active logical volume. Exiting."; exit 1; })
   local ssize=$(echo "$size * 0.025" | bc || { lprompt "${LL2}" "${LL2}: Could not set size for snapshot. Exiting."; exit 1; })
   local ssize=$(echo "$ssize" | cut -d. -f1)
-  
+
   log_message "${LL0}" "Snapshot size set to ${ssize}M." "${FUNCNAME[0]}"
   echo $ssize
 }
@@ -340,11 +340,12 @@ retire_old_snapshots() {
 
   # Remove oldest snapshot if the used space percentage is less than or equal to the threshold
   if [ "${used_space_percentage}" -ge "${THRESHOLD}" ]; then
-    lprompt "${LL0}" "Used space is greater than or equal to ${THRESHOLD}% of the total volume size."
+    lprompt "${LL0}" "At ${used_space_percentage}%, used space is greater than or equal to ${THRESHOLD}% of the total volume size."
 
     # Check if an oldest file exists and retire it
     if [ -b "${oldest_snapshot}" ]; then
-      lprompt "${LL0}" "$(lvs ${VG_NAME}/${oldest_snapshot} && lvs -o lv_time ${VG_NAME}/${oldest_snapshot})"
+      echo "${oldest_snapshot} <<< "
+      lprompt "${LL0}" "$(lvs ${oldest_snapshot} && lvs -o lv_time ${oldest_snapshot})"
 
       confirm_action "Are you sure you want to remove snapshot ${oldest_snapshot}?" || return
 
@@ -405,7 +406,7 @@ log_message "${LL0}" "Check for oldest snapshot completed." "MAIN"
 # Burn 'em
 log_message "${LL0}" "Preparing to remove old snapshots if need..." "MAIN"
 retire_old_snapshots
-log_message "${LL0}" "Check log file ${LOG_DIR}/${LOG_FILE} for details." "MAIN"
+log_message "${LL0}" "Check log file ${LOG_FILE} for details." "MAIN"
 
 # All done!
 log_message "${LL0}" "Snapshot script completed." "MAIN"
